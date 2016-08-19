@@ -1,0 +1,205 @@
+---
+title: "quick learn basics of neural networks"
+author: "pedro.concejerocerezo@gmail.com"
+date: "19 de agosto de 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Propósito
+
+Este documento pretende recopilar el tutorial de [José Portilla](https://www.udemy.com/user/joseporitlla/), profesor de udemy, [publicado a mediados de agosto de 2016 en Data Science Central](http://www.kdnuggets.com/2016/08/begineers-guide-neural-networks-r.html). Se trata de facilitar la lectura y de paso traducirlo a español. 
+
+Traduzco directamente de allí:
+
+En este artículo aprenderemos cómo funcionan las redes neuronales y cómo implementarlas con el lenguaje R. Veremos cómo se pueden crear redes fácilmente con R e incluso visualizarlas. Se necesita una comprensión básica del lenguaje R para comprender este artículo.
+In this article we will learn how Neural Networks work and how to implement them with the R programming language! We will see how we can easily create Neural Networks with R and even visualize them. Basic understanding of R is necessary to understand this article. 
+
+## Las redes neuronales 
+
+Las redes neuronales son un método de aprendizaje automático (o en inglés "machine learning"), que intenta replicar el patrón de aprendizaje de las redes neuronales biológicas. Estas se componen de neurones con dendritas que están interconectadas que reciben inputs, y entonces a partir de esas señales de entrada generan una señal de salida o output a través de un axón a otra neurona. Intentaremos replicar este proceso a través de las redes neuronales artificiales, a las que denominaremos simplemente redes neuronales a partir de ahora. El proceso de crear una red neuronal comienza con la forma más básica, un perceptrón.
+
+## The Perceptron
+
+Empecemos nuestra dicusión hablando sobre el perceptrón. Un perceptrón tiene una o varias señales de entrada o inputs, un parámetro conocido como bias, una función de activación y un único output o señal de salida. El perceptrón recibe inputs, los multiplica por unos pesos, y después los pasa a una función de activación para producir un output.
+
+Hay muchas funciones de activación posibles de las que elegir, como la logística, una función trigonométrica, función escalón (o "step function"). También debemos asegurarnos de añadir el parámetro bias al perceptrón. Este evita problemas cuando todos los inputs pudieran ser iguales a cero, de tal modo que ningún peso multiplicativo tendría efecto alguno. 
+
+Hay muchas representaciones de un perceptrón, [la del artículo es esta](http://www.kdnuggets.com/wp-content/uploads/perceptron.jpg), que incluye el muy importante parámetro "Bias".
+
+Una vez que tenemos el output lo podemos comparar a una etiqueta conocida y ajustar los pesos de forma iterativa (los pesos suelen ser inicializados con valores aleatorios). Iteramos porque repetimos este proceso hasta que hayamos alcanzado el número máximo permitido de iteraciones, o una tasa de error aceptable.
+
+Para crear una red neuronal compleja, o mejor dicho, multicapa, simplemente añadimos capas de perceptrones en la cadena, creando un modelo multicapa de una red neuronal. Tendremos entonces una capa de input que toma directamente los atributos de entrada y una capa de salida que creará los atributos de salida. Todos las capas entre medias de estas dos capas (entrada y salida) se denominan capas ocultas porque no "ven" directamente ni los inputs ni los outputs.
+
+El siguiente [diagrama](http://www.kdnuggets.com/wp-content/uploads/ann-in-hidden-out.jpg) está tomado de la wikipedia.
+
+To create a neural network, we simply begin to add layers of perceptrons together, creating a multi-layer perceptron model of a neural network. You'll have an input layer which directly takes in your feature inputs and an output layer which will create the resulting outputs. Any layers in between are known as hidden layers because they don't directly "see" the feature inputs or outputs. For a visualization of this check out the diagram below (source: Wikipedia).
+
+## Hagamos una red neuronal
+
+### Datos
+
+Usaremos un conjunto de datos incluido en el paquete ISLR, denominado College, que contiene varios atributos de una facultad universitaria (o "college") y una columna categórica que contiene si es pública o privada.
+
+```{r data}
+
+install.packages('ISLR') 
+library(ISLR)
+
+print(head(College,2))
+
+
+```
+
+## Pre-proceso de datos 
+
+Es importante normalizar los datos antes de entrenar una red neuronal sobre ellos. La red puede encontrarse con dificultades para converger antes de alcanzar el máximo número de iteraciones permitidas si los datos no se normalizan. Hay multitud de métodos para normalizar datos, usaremos la función incluida en R scale() -centra los datos en torno a 0 -por defecto- y convierte a misma escala-.
+
+Normalmente será preferible que la escala de los datos esté en rango entre 0-1, ó -1 a 1. En la función scale() se pueden utilizar los argumentos adicionales necesarios para conseguir esto:
+
+```{r scale}
+
+# Crea vectores de valores máximos y mínimos de cols. numéricas
+maxs <- apply(College[,2:18], 2, max)
+mins <- apply(College[,2:18], 2, min)
+
+# Usa scale con los parámetros center y scale apropiados
+scaled.data <- as.data.frame(scale(College[,2:18],center = mins, scale = maxs - mins))
+
+# Mostramos dos primeras filas de la matriz resultante
+print(head(scaled.data,2))
+
+```
+
+
+## División (Split) de conjuntos entrenamiento (Train) y prueba (Test)
+
+El siguiente paso es dividir ("split") nuestros datos en dos conjuntos, llamados training y test. El objetivo es entrenar los datos con el conjunto de entrenamiento y luego medir el rendimiento o la capacidad predictiva con el conjunto de prueba o test, al que la red no ha visto. Este paso es esencial porque si no hacemos esta división y por ejemplo medimos el rendimiento sólo con conjunto entrenamiento tendremos un valor falso o que no se corresponde con la realidad -que la red funcione o prediga con datos que no ha visto o con los que no ha sido entranada.
+
+Utilizamos la librería caTools para hacer esta división aleatoria
+
+```{r rsplit}
+
+# Convierte la columna "Private" de una etiqueta a numérica (0-1)
+# Private = 1 es privada
+# Private = 0 es pública
+Private = as.numeric(College$Private)-1
+data = cbind(Private,scaled.data)
+
+library(caTools)
+set.seed(101)  # Necesaria para que aleatorización sea siempre la misma
+
+# Creamos el vector para split -vale cualquier columna. 
+# 70% entramiento
+# 30% prueba
+split = sample.split(data$Private, SplitRatio = 0.70)
+
+# Generamos los conjuntos de train y test
+train = subset(data, split == TRUE)
+test = subset(data, split == FALSE)
+
+nrow(scaled.data)
+nrow(train)
+nrow(test)
+
+```
+
+## La función neuralnetwork()
+
+Antes de que podamos efectivamente entrenar la red con neuralnetwork() debemos crear una fórmula que insertaremos en el modelo de aprendizaje automático. Esta función no acepta el típico formato de R para una fórmula que incluya todos los atributos (por ejemplo "y ~ ."). Sin embargo podemos preparar un código adicional para crear la fórmula expandida y ahorrarnos la introducción manual.
+
+```{r formulascript}
+
+feats <- names(scaled.data)
+
+# concatenamos las cadenas de los nombres de variables
+f <- paste(feats,collapse=' + ')
+f <- paste('Private ~',f)
+
+# convertimos a fórmula
+f <- as.formula(f)
+
+f
+
+```
+
+El siguiente código es para entrenar la red neuronal con la función neuralnet() del paquete del mismo nombre. Le vamos a pedir una red multicapa con 3 capas ocultas de 10 neuronas cada una. El parámetro linear.output está configurado a FALSE porque queremos obtener una clasificación (1/0), y no un valor numérico como en regresión. Ver este [otro tutorial en r-bloggers](https://www.r-bloggers.com/fitting-a-neural-network-in-r-neuralnet-package/). En realidad, con la clasificación lo que obtendremos es *una probabilidad de pertenecer a una clase*, esto es, la red nos devolverá un valor numérico, pero en el rango 0-1 de pertenencia a una clase. Para ver [redes neuronales para regresión es recomendable este ejemplo](http://gekkoquant.com/2012/05/26/neural-networks-with-r-simple-example/).
+
+```{r neuralnet}
+
+install.packages('neuralnet')
+
+library(neuralnet)
+
+nn <- neuralnet(f,
+                train,                 # recuerda entrenamos solo con conjunto entrenamiento.
+                hidden = c(10, 10, 10),
+                linear.output = FALSE)
+
+```
+
+## Predictions and Evaluations
+
+¡Veamos cómo predice nuestra red entrenada! Usaremos la función compute() con los datos de prueba para crear valores predichos. Esto nos devolverá una lista sobre la que podremos llamar a net.result.
+ 
+```{r predict}
+
+# Calculamos predicciones a partir de valores en test set
+predicted.nn.values <- compute(nn, test[2:18])
+
+# Vemos unos pocos valores predichos
+print(head(predicted.nn.values$net.result))
+
+
+```
+
+Veremos que los resultados que nos proporciona el modelo de red están comprendidos entre 0 y 1, y expresan probabilidades de pertenencia a una clase  (1 o Privada) frente a la otra (0 ó pública). ¿Cómo medimos la capacidad predictiva? Hay multitud de procedimientos y podemos recomendar las [curvas ROC, sobre las cuales tenéis un tutorial en este mismo blog](https://pedroconcejero.wordpress.com/2016/03/07/a-roc-curves-tutorial-part-i/).
+
+Otra forma más rápida es simplemente escoger un punto de corte intermedio. Por ejemplo, todos los superiores a 0.5 serán considerados 1 y los inferiores 0. En realidad, si exploráis los resultados en detalle veréis cómo hay unos valores muy muy próximos a 1 y otros muy próximos a 0. Esto es quizás específico de este problema en concreto, no tiene por qué ser el caso con otros problemas o conjuntos de datos que analicéis.
+
+Pues bien, una vez decidido el punto de corte 0.5 podemos pasar la clase predicha a 0-1 con un simple "round".
+
+
+```{r round}
+
+predicted.nn.values$net.result <- sapply(predicted.nn.values$net.result,
+                                         round,
+                                         digits=0)
+
+```
+
+De tal modo que ahora podemos calcular una matriz de confusión que compare las clases predichas con las reales en el conjunto de test.
+
+```{r confusionmatr}
+
+table(test$Private,
+      predicted.nn.values$net.result)
+
+```
+
+Lo cual nos da una predicción casi perfecta (!).
+
+## Visualizar la red neuronal
+
+Esto es tan simple como:
+
+```{r}
+
+plot(nn)
+
+```
+
+Bueno, tan simple de pedir pero tan difícil de interpretar. Y esto es porque hemos pedido un modelo complejo, tres capas ocultas de 10 neuronas... Veamos cómo quedaría una red más simple, de tres capas pero de sólo 5 neuronas cada una.
+
+```{r neuralnet}
+
+nn <- neuralnet(f,
+                train,                 # recuerda entrenamos solo con conjunto entrenamiento.
+                hidden = c(5, 5, 5),
+                linear.output = FALSE)
+
+plot(nn)
+```
